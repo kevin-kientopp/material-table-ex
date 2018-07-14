@@ -2,6 +2,7 @@ import {Component, OnInit, ViewChild} from '@angular/core';
 import {MatPaginator, MatTableDataSource, MatSort} from '@angular/material';
 import { merge} from 'rxjs';
 import {Subject} from 'rxjs';
+import {startWith, map} from 'rxjs/operators';
 
 @Component({
   selector: 'app-root',
@@ -9,26 +10,59 @@ import {Subject} from 'rxjs';
   styleUrls: ['./app.component.css']
 })
 export class AppComponent {
-  displayedColumns: string[] = ['position', 'name', 'weight', 'symbol', 'delete'];
-  private data = ELEMENT_DATA;
-  dataSource = new MatTableDataSource<PeriodicElement>(this.data);
-  
+  displayedColumns: string[] = ['position', 'name', 'weight', 'symbol', 'edit', 'delete'];
+  private elementData$ = new Subject();
+  data: PeriodicElement[] = [];
+  resultsLength;
+
   @ViewChild(MatPaginator) paginator: MatPaginator;
   @ViewChild(MatSort) sort: MatSort;
 
   ngOnInit() {
-    this.dataSource.paginator = this.paginator;
-    this.dataSource.sort = this.sort;
+    // If the user changes the sort order, reset back to the first page.
+    this.sort.sortChange.subscribe(() => this.paginator.pageIndex = 0);
+
+    this.resultsLength = ELEMENT_DATA.length;
+    this.paginator.pageSize = 5;
+
+    merge(this.sort.sortChange, this.paginator.page)
+      .pipe(
+        startWith({}),
+        map(() => {
+          console.log(document.getElementById('filter'));
+          if (document.getElementById('filter').value) {
+            this.applyFilter(document.getElementById('filter').value);
+            return this.data;
+          } else { 
+            return ELEMENT_DATA.slice(this.paginator.pageIndex * this.paginator.pageSize, this.paginator.pageIndex * this.paginator.pageSize + this.paginator.pageSize);
+          }
+        })
+      )
+      .subscribe(data => {
+        console.log(data);
+        this.data = data
+      }); 
+  }
+
+  ngAfterViewInit() {
+    console.log('this.paginator.pageSize');
+    console.log(this.paginator.pageSize);
   }
 
   applyFilter(filterValue: string) {
-    this.dataSource.filter = filterValue.trim().toLowerCase();
+    const matched = ELEMENT_DATA.filter(el => (el.position + el.name + el.weight + el.symbol).toLowerCase().includes(filterValue.toLowerCase()));
+    this.resultsLength = matched.length;
+    this.data = matched.slice(this.paginator.pageIndex * this.paginator.pageSize, this.paginator.pageIndex * this.paginator.pageSize + this.paginator.pageSize);
   }
 
   delete(element: PeriodicElement) {
-    this.data = this.data.filter(el => element.position !== el.position);
-    this.dataSource.data = this.data;
-    this.ngOnInit();
+    this.resultsLength -= 1;
+    ELEMENT_DATA = ELEMENT_DATA.filter(el => element.position !== el.position)); 
+    this.data = ELEMENT_DATA.slice(this.paginator.pageIndex * this.paginator.pageSize, this.paginator.pageIndex * this.paginator.pageSize + this.paginator.pageSize);
+  }
+
+  edit(element: PeriodicElement) {
+    alert('edit!');
   }
 }
 
@@ -39,7 +73,7 @@ export interface PeriodicElement {
   symbol: string;
 }
 
-const ELEMENT_DATA: PeriodicElement[] = [
+let ELEMENT_DATA: PeriodicElement[] = [
   {position: 1, name: 'Hydrogen', weight: 1.0079, symbol: 'H'},
   {position: 2, name: 'Helium', weight: 4.0026, symbol: 'He'},
   {position: 3, name: 'Lithium', weight: 6.941, symbol: 'Li'},
